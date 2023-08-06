@@ -1,4 +1,4 @@
-main = src/main.cpp
+main = src/main.cpp src/bitmap.cpp
 
 all:
 	mpicxx -Wall -Werror -o main $(main) -Iinclude
