@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 //
 int L = 60;
 
@@ -8,13 +10,17 @@ int W = 20;
 int H = 15;
 
 //
-std::string OUTPUT_BMP = "solution.bmp";
+std::string BMP_FILENAME = "solution.bmp";
+std::string CSV_FILENAME = "solution.csv";
 
 //
-double TARGET_RMS = 1e-7;
+double TARGET_RMS = 1e-6;
 
 // Maximum number of iteration for the Jacobi method
 int MAX_ITERATION = 50 * L;
+
+//
+int ROOT_RANK = 0;
 
 /**
  *

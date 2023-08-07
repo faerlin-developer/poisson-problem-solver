@@ -1,7 +1,7 @@
-src = app/main.cpp bitmap/bitmap.cpp util/util.cpp
+src = app/main.cpp io/bitmap.cpp io/csv.cpp
 
 all:
-	mpicxx -Wall -Werror -o main $(src) -Ibitmap -Iapp -Iutil
+	mpicxx -Wall -Werror -o main $(src) -Iapp -Iio
 
 exec:
 	mpiexec -n 12 ./main
