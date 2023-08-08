@@ -2,8 +2,6 @@
 #include <cfloat>
 #include <cmath>
 #include "bitmap.h"
-#include "bitmapinfoheader.h"
-#include "bitmapfileheader.h"
 
 // Bitmap coordinates is cartesian coordinates
 void Bitmap::setPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue, uint8_t *pixels, int width) {
