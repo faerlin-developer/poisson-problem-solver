@@ -10,7 +10,7 @@
 
 int main(int argc, char *argv[]) {
 
-    // Initialize MPI environment
+    // ---- BEGIN INITIALIZE MPI ENVIRONMENT ----
     int num_process;
     int world_rank;
     MPI_Init(&argc, &argv);
@@ -45,7 +45,8 @@ int main(int argc, char *argv[]) {
     MPI_Type_commit(&HORIZONTAL_HALO);
     MPI_Type_commit(&VERTICAL_HALO);
 
-    printf("world_rank=%d cartesian_rank=%d coords=(%d,%d)\n", world_rank, cartesian_rank, cartesian_x, cartesian_y);
+    printf("Running process with rank %d and cartesian coords (%d,%d)\n", cartesian_rank, cartesian_x, cartesian_y);
+    // ---- END INITIALIZE MPI ENVIRONMENT ----
 
     // Create sub-globalGrid for current process with halo
     // The solution is computed alternately in the array A and B.
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]) {
     MPI_Reduce(&localGrid[0], &globalGrid[0], L * L, MPI_DOUBLE, MPI_SUM, ROOT_RANK, cartesian);
     // ---- END GATHER APPROXIMATE SOLUTIONS FROM ALL PROCESSES ----
 
-    // Write approximate solution on a csv file and create 2D visualization on a bitmap file
+    // Write approximate solution on a csv file and draw 2D visualization on a bitmap file
     if (world_rank == ROOT_RANK) {
         Csv::write(CSV_FILENAME, globalGrid, L, L);
         Bitmap::write(BMP_FILENAME, globalGrid, L, L);
