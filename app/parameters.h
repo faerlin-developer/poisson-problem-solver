@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdexcept>
+#include <string>
 #include <cmath>
 
 //
@@ -14,7 +16,7 @@ std::string BMP_FILENAME = "solution.bmp";
 std::string CSV_FILENAME = "solution.csv";
 
 //
-double TARGET_RMS = 1e-6;
+double TARGET_RMSE = 1e-6;
 
 // Maximum number of iteration for the Jacobi method
 int MAX_ITERATION = 50 * L;
@@ -52,17 +54,12 @@ double g(int x, int y) {
     }
 
     auto delta = (2.0) * M_PI / L;
-    if (y == L - 1) {
-        // horizontal boundary
+    if (y == 0 || y == L - 1) {
         return sin(delta * x);
-    } else if (y == 0) {
-        return sin(delta * x);
-    } else if (x == 0) {
-        // vertical boundary
+    } else if (x == 0 || x == L - 1) {
         return sin(delta * y);
-    } else if (x == L - 1) {
-        return sin(delta * y);
+    } else {
+        throw std::logic_error("grid coordinates is not on a boundary");
     }
 
-    throw std::logic_error("grid coordinates is not on a boundary");
 }

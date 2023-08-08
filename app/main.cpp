@@ -1,19 +1,12 @@
-#include <iostream>
 #include <mpi.h>
 #include <cmath>
 #include <cstring>
 #include <cfloat>
-#include <functional>
-#include <fstream>
 #include "main.h"
 #include "parameters.h"
 #include "bitmap.h"
 #include "csv.h"
 
-// Let the domain of A,f, and g be 0 <= x <= 2 * pi and 0 <= y <= 2 * pi.
-// del2 A(x,y) = f(x, y) inside boundary
-// A(x, y) = g(x, y) on boundary
-// https://py-pde.readthedocs.io/en/latest/examples_gallery/laplace_eq_2d.html
 
 int main(int argc, char *argv[]) {
 
@@ -25,7 +18,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm world = MPI_COMM_WORLD;
 
-    // Create cartesian communicator with non-periodic boundaries and a dimension derived from L, W, and H.
+    // Create cartesian communicator with non-periodic boundaries and a dimension derived from global L, W, and H.
     int cartesian_rank;
     int cartesian_coords[2];
     int cartesian_periodicity[2] = {0, 0};
@@ -56,10 +49,12 @@ int main(int argc, char *argv[]) {
 
     // Create sub-globalGrid for current process with halo
     // The solution is computed alternately in the array A and B.
-    // The iteration is terminated when the difference between the successive approximations to the solution
+    // The iteration is terminated when the residuals between the successive approximations to the solution
     // is less than ...
     auto smallGridA = (double *) malloc(sizeof(double) * (W + 2) * (H + 2));
     auto smallGridB = (double *) malloc(sizeof(double) * (W + 2) * (H + 2));
+    auto bufferLeft = (double *) malloc(H * sizeof(double));
+    auto bufferRight = (double *) malloc(H * sizeof(double));
 
     auto A = [&](int i, int j) -> double & { return smallGridA[j * (W + 2) + i]; };
     auto B = [&](int i, int j) -> double & { return smallGridB[j * (W + 2) + i]; };
@@ -72,20 +67,17 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i <= W; i++) {
         for (int j = 1; j <= H; j++) {
             A(i, j) = isBorder(x(i), y(j)) ? g(x(i), y(j)) : 0;
-            B(i, j) = A(i, j) + 10 * TARGET_RMS;
+            B(i, j) = A(i, j) + 10 * TARGET_RMSE;
         }
     }
 
-    // Receiving buffers for vertical halos
-    auto bufferLeft = (double *) malloc(H * sizeof(double));
-    auto bufferRight = (double *) malloc(H * sizeof(double));
-
-    // compute
+    // ---- BEGIN JACOBI METHOD ----
+    // Apply Jacobi Method until target RMS is reached or maximum of iterations is exceeded
     auto step = 1;
-    auto rms = DBL_MAX;
-    while (step <= MAX_ITERATION && rms > TARGET_RMS) {
+    auto rmse = DBL_MAX;
+    while (step <= MAX_ITERATION && rmse > TARGET_RMSE) {
 
-        // Swap halo
+        // ---- BEGIN SWAP HALO ----
         MPI_Request rightSend, leftSend, upSend, downSend;
         MPI_Issend(&A(1, 1), 1, VERTICAL_HALO, left, 1, cartesian, &leftSend);
         MPI_Issend(&A(W, 1), 1, VERTICAL_HALO, right, 1, cartesian, &rightSend);
@@ -111,32 +103,36 @@ int main(int argc, char *argv[]) {
                 A(W + 1, j) = bufferRight[j - 1];
             }
         }
+        // ---- END SWAP HALO ----
 
-        // Jacobi iteration
+        // ---- BEGIN JACOBI UPDATE ----
         auto h2 = pow(1.0 / (L + 1.0), 2.0);
         for (int i = 1; i <= W; i++) {
             for (int j = 1; j <= H; j++) {
-
+                //
                 if (isBorder(x(i), y(j))) {
                     B(i, j) = A(i, j);
                 } else {
-                    B(i, j) = (0.25) * (A(i - 1, j) + A(i + 1, j) + A(i, j - 1) + A(i, j + 1) - h2 * f(x(i), y(j)));
+                    B(i, j) = 0.25 * (A(i - 1, j) + A(i + 1, j) + A(i, j - 1) + A(i, j + 1) - h2 * f(x(i), y(j)));
                 }
-
             }
         }
+        // ---- END JACOBI UPDATE ----
 
-        // ...
-        double globalSquares = 0;
-        double localSquares = squares(smallGridA, smallGridB, W, H);
-        MPI_Allreduce(&localSquares, &globalSquares, 1, MPI_DOUBLE, MPI_SUM, cartesian);
-        rms = sqrt((1.0 / (L * L)) * globalSquares);
+        // ---- BEGIN COMPUTE GLOBAL RMSE ----
+        double globalResiduals = 0;
+        double localResiduals = residuals(smallGridA, smallGridB, W, H);
+        MPI_Allreduce(&localResiduals, &globalResiduals, 1, MPI_DOUBLE, MPI_SUM, cartesian);
+        rmse = sqrt((1.0 / (L * L)) * globalResiduals);
+        // ---- END COMPUTE GLOBAL RMSE ----
 
         // ...
         std::memcpy(smallGridA, smallGridB, ((W + 2) * (H + 2)) * sizeof(double));
         step++;
     }
+    // ---- END JACOBI METHOD ----
 
+    // ---- BEGIN GATHER APPROXIMATE SOLUTIONS FROM ALL PROCESSES ----
     //
     auto localGrid = (double *) malloc(sizeof(double) * (L * L));
     auto globalGrid = (double *) malloc(sizeof(double) * (L * L));
@@ -156,17 +152,15 @@ int main(int argc, char *argv[]) {
 
     // ...
     MPI_Reduce(&localGrid[0], &globalGrid[0], L * L, MPI_DOUBLE, MPI_SUM, ROOT_RANK, cartesian);
+    // ---- END GATHER APPROXIMATE SOLUTIONS FROM ALL PROCESSES ----
 
-    // ...
+    // Write approximate solution on a csv file and create 2D visualization on a bitmap file
     if (world_rank == ROOT_RANK) {
-
-        Bitmap bitmap(BMP_FILENAME);
-        bitmap.write(globalGrid, L, L);
-
-        Csv csv(CSV_FILENAME);
-        csv.write(globalGrid, L, L);
+        Csv::write(CSV_FILENAME, globalGrid, L, L);
+        Bitmap::write(BMP_FILENAME, globalGrid, L, L);
     }
 
+    // Finalize MPI Environment
     MPI_Type_free(&VERTICAL_HALO);
     MPI_Type_free(&HORIZONTAL_HALO);
     MPI_Finalize();
@@ -192,12 +186,12 @@ int coordToRank(int cartesian_x, int cartesian_y, const int cartesian_dimension[
 
 }
 
-double squares(double *u, double *v, int W, int H) {
+double residuals(double *u, double *v, int width, int height) {
 
     double sum2 = 0;
-    for (int i = 1; i <= W; i++) {
-        for (int j = 1; j <= H; j++) {
-            sum2 += pow(u[j * (W + 2) + i] - v[j * (W + 2) + i], 2);
+    for (int i = 1; i <= width; i++) {
+        for (int j = 1; j <= height; j++) {
+            sum2 += pow(u[j * (width + 2) + i] - v[j * (width + 2) + i], 2);
         }
     }
 

@@ -1,12 +1,9 @@
 #include <fstream>
 #include <cfloat>
 #include <cmath>
-#include <utility>
 #include "bitmap.h"
 #include "bitmapinfoheader.h"
 #include "bitmapfileheader.h"
-
-Bitmap::Bitmap(std::string filename) : filename(std::move(filename)) {}
 
 // Bitmap coordinates is cartesian coordinates
 void Bitmap::setPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue, uint8_t *pixels, int width) {
@@ -19,7 +16,7 @@ void Bitmap::setPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue, ui
     pixels[0] = blue;
 }
 
-bool Bitmap::write(double *grid, int width, int height) {
+bool Bitmap::write(const std::string &filename, double *grid, int width, int height) {
 
     auto maximum = -DBL_MAX;
     auto minimum = DBL_MAX;
@@ -34,7 +31,7 @@ bool Bitmap::write(double *grid, int width, int height) {
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < height; j++) {
             auto value = std::round(std::abs((grid[j * width + i] - minimum) / (maximum - minimum)) * 255.0);
-            this->setPixel(i, j, value, 0, 0, pixels.get(), width);
+            Bitmap::setPixel(i, j, value, 0, 0, pixels.get(), width);
         }
     }
 
@@ -48,7 +45,7 @@ bool Bitmap::write(double *grid, int width, int height) {
     infoHeader.height = height;
 
     std::ofstream file;
-    file.open(this->filename.c_str(), std::ios::out | std::ios::binary);
+    file.open(filename, std::ios::out | std::ios::binary);
     if (!file) {
         return false;
     }

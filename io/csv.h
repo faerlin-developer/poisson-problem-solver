@@ -2,9 +2,5 @@
 
 class Csv {
 public:
-    std::string name;
-
-    explicit Csv(std::string name);
-
-    void write(double *grid, int W, int H);
+    static void write(const std::string &filename, double *grid, int W, int H);
 };

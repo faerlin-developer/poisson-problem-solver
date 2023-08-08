@@ -4,11 +4,11 @@
  *
  * @param u
  * @param v
- * @param W
- * @param H
+ * @param width
+ * @param height
  * @return
  */
-double squares(double *u, double *v, int W, int H);
+double residuals(double *u, double *v, int width, int height);
 
 /**
  *
